@@ -71,7 +71,7 @@ public class day13 extends Graph {
 //        return totalDistance;
 //    }
 
-    // TSP using Held Karp's algorithm
+    // TSP using Dynamic Programming approach
     // Complexity: O(n^2 * 2^n)
     public static int TSP_DP(Graph graph, String startVertex, List<String> vertexList) {
         int n = vertexList.size();
