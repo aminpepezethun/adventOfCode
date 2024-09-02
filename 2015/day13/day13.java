@@ -2,7 +2,7 @@ import java.io.File;
 import java.util.*;
 
 /*
-    Problem involved finding the maximum possible weight in a cycle graph
+    Problem involved finding the maximum Hamiltonian cycle in an undirected graph
  */
 
 
@@ -14,57 +14,110 @@ public class day13 extends Graph {
 
         int longestChange = Approach(inputFile, "BruteForce", 0);
         int longestChangeWithSelf = Approach(inputFile,"BruteForce",1 );
+        int longestChangeTSP = Approach(inputFile, "TSP", 0);
 
-        System.out.println(longestChange);
-        System.out.println(longestChangeWithSelf);
+        System.out.println("Bruteforce result question 1: " + longestChange);
+        System.out.println("Bruteforce result question 2: " + longestChangeWithSelf);
+        System.out.println("TSP result question 1: " + longestChangeTSP);
     }
 
     public static int Approach(String fileName, String approach, int mode) {
-        // processData from file into List<List<String>>
-        List<List<String>> processedData = null;
-        List<List<String>> curatedData = null;
+        List<List<String>> curatedData = curateData(fileName, mode);
 
-        // Mode 0: normal
-        if (mode == 0) {
-            processedData = processData(fileName);
-            // Get unique pairs of elements (formula: n * (n-1) / 2) where n is the number of elements
-            curatedData = curateData(processedData);
-        }
-        // Mode 1: with myself
-        else if (mode == 1) {
-            processedData = processDataMyself(fileName);
-            // Get unique pairs of elements (formula: n * (n-1) / 2) where n is the number of elements
-            curatedData = curateData(processedData);
-        }
+        // Create a graph from curatedData
+        Graph graph = grapify(curatedData);
 
-        // Initialise graph
-        Graph graph = new Graph();
-
-        // Add edges to the bidirectional weighted graph using the curatedData
-        for (List<String> line: curatedData) {
-            String src = line.get(0);
-            String dest = line.get(1);
-            int dist = Integer.parseInt(line.get(2));
-            graph.addEdge(src, dest, dist);  // add edge to the graph
-        }
-
-        if (Objects.equals(approach, "BruteForce")) {
+        if ("BruteForce".equals(approach)) {
             return BruteForce(graph);
-        } else if (Objects.equals(approach, "TSP")) {
-            return 0;
-        } else {
-            return 0;
+        } else if ("TSP".equals(approach)) {
+            Set<String> uniqueVertices = graph.getVertices();
+            List<String> listUniqueVertices = new ArrayList<>(uniqueVertices);
+            String startVertex = listUniqueVertices.get(0);
+            return TSP_DP(graph, startVertex, listUniqueVertices);
         }
+        return 0;
     }
 
-//    // Not implemented yet
-//    static int TSP(Graph graph) {
-//        int longestChange = Integer.MIN_VALUE;
+    // TSP: greedy approach: not correct result
+//    static int TSP_Greedy(Graph graph, String startVertex) {
+//        Set<String> unvisited = new HashSet<>(graph.getVertices());
+//        String currentVertex = startVertex;
+//        int totalDistance = 0;
 //
+//        unvisited.remove(startVertex);
 //
+//        while (!unvisited.isEmpty()) {
+//            int maxDistance = Integer.MIN_VALUE;
+//            String nextVertex = null;
 //
-//        return longestChange;
+//            for (Edge vertices: graph.getAdjVertices(currentVertex)) {
+//                if (unvisited.contains(vertices.dest) && vertices.weight > maxDistance) {
+//                    maxDistance = vertices.weight;
+//                    nextVertex = vertices.dest;
+//                }
+//
+//                if (nextVertex == null) {
+//                    break;
+//                }
+//            }
+//
+//            totalDistance += maxDistance;
+//            unvisited.remove(nextVertex);
+//            currentVertex = nextVertex;
+//        }
+//
+//        totalDistance += graph.getDistance(currentVertex, startVertex);
+//
+//        return totalDistance;
 //    }
+
+    // TSP using Held Karp's algorithm
+    // Complexity: O(n^2 * 2^n)
+    public static int TSP_DP(Graph graph, String startVertex, List<String> vertexList) {
+        int n = vertexList.size();
+        int startIndex = vertexList.indexOf(startVertex);
+
+        // Create a map to assign each vertex an index
+        Map<String, Integer> vertexToIndex = new HashMap<>();
+        for (int i = 0; i < n; i++) {
+            vertexToIndex.put(vertexList.get(i), i);
+        }
+
+        // Initialize the DP table
+        int[][] dp = new int[1 << n][n];
+        for (int[] row : dp) {
+            Arrays.fill(row, Integer.MIN_VALUE / 2);
+        }
+
+        // Base case: start vertex to itself
+        dp[1 << startIndex][startIndex] = 0;
+
+        // Iterate through all subsets of vertices
+        for (int mask = 1; mask < (1 << n); mask++) {
+            for (int end = 0; end < n; end++) {
+                if ((mask & (1 << end)) == 0) continue;
+
+                for (int next = 0; next < n; next++) {
+                    if (end == next || (mask & (1 << next)) > 0) continue;
+
+                    int newMask = mask | (1 << next);
+                    int distance = graph.getDistance(vertexList.get(end), vertexList.get(next));
+                    dp[newMask][next] = Math.max(dp[newMask][next], dp[mask][end] + distance);
+                }
+            }
+        }
+
+        // Find the maximum cost to complete the tour
+        int finalMask = (1 << n) - 1;
+        int maxCost = Integer.MIN_VALUE;
+        for (int end = 0; end < n; end++) {
+            if (end == startIndex) continue;
+            int tourCost = dp[finalMask][end] + graph.getDistance(vertexList.get(end), startVertex);
+            maxCost = Math.max(maxCost, tourCost);
+        }
+
+        return maxCost;
+    }
 
     static int BruteForce(Graph graph) {
         int longestChange = Integer.MIN_VALUE;
@@ -89,19 +142,19 @@ public class day13 extends Graph {
         return longestChange;
     }
 
-    static List<List<String>> processDataMyself(String fileName) {
-        List<List<String>> processedData = processData(fileName);
-        List<String> uniqueElement = getUnique(processedData);
-        String myself = "Myself";
-        for (String element : uniqueElement) {
-            List<String> line = new ArrayList<>();
-            line.add(0, myself);
-            line.add(1, element);
-            line.add(2, "0");
-            processedData.add(line);
+    static Graph grapify(List<List<String>> data) {
+        // Initialise graph
+        Graph graph = new Graph();
+
+        // Add edges to the bidirectional weighted graph using the curatedData
+        for (List<String> line: data) {
+            String src = line.get(0);
+            String dest = line.get(1);
+            int dist = Integer.parseInt(line.get(2));
+            graph.addEdge(src, dest, dist);  // add edge to the graph
         }
 
-        return processedData;
+        return graph;
     }
 
     static List<String> getUnique(List<List<String>> list) {
@@ -182,33 +235,40 @@ public class day13 extends Graph {
 
 
     // Return a list with bidirectional path between 2 vertices and their accumulate weight
-    static List<List<String>> curateData(List<List<String>> data) {
-            List<List<String>> result = new ArrayList<>();
+    static List<List<String>> curateData(String name, int mode) {
+        List<List<String>> processedData = null;
+        List<List<String>> result = new ArrayList<>();
 
-            // Set to find uniquePath
-            Set<String> visitedSet = new HashSet<>();
+        if (mode == 0) {
+            processedData = processData(name);
+        } else if (mode == 1) {
+            processedData = processDataMyself(name);
+        }
 
-            for (List<String> line: data) {
-                String src = line.get(0);
-                String dest = line.get(1);
-                String weight = line.get(2);
+        // Set to find uniquePath
+        Set<String> visitedSet = new HashSet<>();
 
-                // Having two-way pair to check with the visitedSet if they existed
-                String pair = src + '-' + dest;
-                String reversePair = dest + '-' + src;
+        for (List<String> line: processedData) {
+            String src = line.get(0);
+            String dest = line.get(1);
+            String weight = line.get(2);
 
-                if (!visitedSet.contains(pair) && !visitedSet.contains(reversePair)) {
-                    // uniquePath = {src, dest, accumulated_weight}
-                    List<String> uniquePath = getUniquePath(data, src, dest);
-                    if (!uniquePath.isEmpty()) {
-                        result.add(uniquePath);    // add to the result the uniquePath
-                        visitedSet.add(pair);      // add pair to the visitedSet
-                        visitedSet.add(reversePair);  // add reversePair to the visitedSet
-                    }
+            // Having two-way pair to check with the visitedSet if they existed
+            String pair = src + '-' + dest;
+            String reversePair = dest + '-' + src;
+
+            if (!visitedSet.contains(pair) && !visitedSet.contains(reversePair)) {
+                // uniquePath = {src, dest, accumulated_weight}
+                List<String> uniquePath = getUniquePath(processedData, src, dest);
+                if (!uniquePath.isEmpty()) {
+                    result.add(uniquePath);    // add to the result the uniquePath
+                    visitedSet.add(pair);      // add pair to the visitedSet
+                    visitedSet.add(reversePair);  // add reversePair to the visitedSet
                 }
             }
+        }
 
-            return result;
+        return result;
     }
 
     // Return uniquePath containing src, dest and their accumulated weight
@@ -237,6 +297,21 @@ public class day13 extends Graph {
         }
 
         return uniquePath;
+    }
+
+    static List<List<String>> processDataMyself(String fileName) {
+        List<List<String>> processedData = processData(fileName);
+        List<String> uniqueElement = getUnique(processedData);
+        String myself = "Myself";
+        for (String element : uniqueElement) {
+            List<String> line = new ArrayList<>();
+            line.add(0, myself);
+            line.add(1, element);
+            line.add(2, "0");
+            processedData.add(line);
+        }
+
+        return processedData;
     }
 
     static List<List<String>> processData(String name) {
